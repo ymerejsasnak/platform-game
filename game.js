@@ -1,13 +1,99 @@
-var simpleLevelPlan = [
-  "                      ",
-  "                      ",
-  "  x              = x  ",
-  "  x         o o    x  ",
-  "  x @      xxxxx   x  ",
-  "  xxxxx            x  ",
-  "      x!!!!!!!!!!!!x  ",
-  "      xxxxxxxxxxxxxx  ",
-  "                      "
+//game levels is main array of all levels, each array inside it is a level, each string element in each of those arrays is 
+//a horizontal line on the map
+var GAME_LEVELS = [
+  ["                      ",
+   "                      ",
+   "  x              = x  ",
+   "  x         o o    x  ",
+   "  x @      xxxxx   x  ",
+   "  xxxxx            x  ",
+   "      x!!!!!!!!!!!!x  ",
+   "      xxxxxxxxxxxxxx  ",
+   "                      "],
+
+  ["   v  v     v v  v  v    vvv  vvvv     ",
+   "                                       ",
+   "                                       ",
+   "                                       ",
+   "                                       ",
+   "                                       ",
+   "@                                     o",
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "                                       "],
+
+  ["       o        o         o     =      ",
+   "                    =                  ",
+   "            o  =     o                 ",
+   "        =                 x            ",
+   "       x        x         x            ",
+   "       x        x    =    x      =     ",
+   "@      x   =    x    =    x      =    o",
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "                                       "],
+
+  ["                                                                              ",
+   "                                                                              ",
+   "                                                                              ",
+   "                                                                              ",
+   "                                                                              ",
+   "                                           =                                  ",
+   "                                                                              ",
+   "                                                                              ",
+   "                                 xxxxxxxx   =                                 ",
+   "                              x             o                                 ",
+   "                 o         x                                                  ",
+   "                     x  x                                                     ",
+   "               x  x                                                           ",
+   "      x  x  x                                =                                ",
+   " @  x                                                                         ",
+   " x                                                                            ",
+   "                                            o         =            o          ",
+   "                                              xxxxxxxxxxxxxxxxxxxxxx          ",
+   "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"],
+
+  ["                                                                              ",
+   "    @                                                                         ",
+   "                      x                                                       ",
+   "     o               xxx                                                      ",
+   "                     xvx                                                      ",
+   "                              o                                               ",
+   "      xxx                                                                     ",
+   "                                                                              ",
+   "                                                                              ",
+   "                              x                                               ",
+   "                 o         x                                                  ",
+   "                     x  x                                                     ",
+   "               xxxx                                                           ",
+   "      xxxxxxxx  v                                                  o          ",
+   "                                              xxxxxxxxxxx      =   x          ",
+   "                                        xxx   x oo    =        =   x          ",
+   "      o    =      =             o  xxx        x oo    =        =   x          ",
+   "     xxx      xxx     xxx     xxx             xxxxxxxxxxxxxxxxxxxxxx          ",
+   "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"],
+
+  ["                      ",
+   "                      ",
+   "                      ",
+   "                      ",
+   " v  ooo=oooo=ooooo=oo ",
+   "                      ",
+   "    ooooooo=ooooo=ooo ",
+   " @                    ",
+   "xxx xxxxxxxxx xxx xxxx",
+   "!!!!!!!!!!!!!!!!!!!!!!"],
+
+  [" |||||||||||||||||||||",
+   "                      ",
+   "                      ",
+   "                      ",
+   "                      ",
+   "                      ",
+   "    o o o o o o o o o ",
+   " @          =         ",
+   "xxxxxxxxxxxxxxxxxxxxxx",
+   "!!!!!!!!!!!!!!!!!!!!!!"]
+
+
 ];
 
 // x = wall, @ = player, ! = lava, '=' = horizontal lava, | = vertical lava, v = dripping lava, o = coin
@@ -81,6 +167,83 @@ Level.prototype.isFinished = function() {
 };
 
 
+//for collision:
+Level.prototype.obstacleAt = function(pos, size) {
+	var xStart = Math.floor(pos.x);
+	var xEnd = Math.ceil(pos.x + size.x);
+	var yStart = Math.floor(pos.y);
+	var yEnd = Math.ceil(pos.y + size.y);
+
+	if (xStart < 0 || xEnd > this.width || yStart < 0) {
+		return "wall";
+	}
+	if (yEnd > this.height) {
+		return "lava";
+	}
+
+	for (var y = yStart; y < yEnd; y++) {
+		for (var x = xStart; x < xEnd; x++) {
+			var fieldType = this.grid[y][x];
+			if (fieldType) return fieldType;
+		}
+	}
+};
+
+Level.prototype.actorAt = function(actor) {
+	for (var i = 0; i < this.actors.length; i++) {
+		var other = this.actors[i];
+		if (other !== actor &&
+			  actor.pos.x + actor.size.x > other.pos.x &&
+			  actor.pos.x < other.pos.x + other.size.x &&
+			  actor.pos.y + actor.size.y > other.pos.y &&
+			  actor.pos.y < other.pos.y + other.size.y) {
+			return other;
+		}
+	}
+};
+
+
+var maxStep = 0.05;
+
+Level.prototype.animate = function(step, keys) {
+	//endgame animation if won/lost (otherwise status is null and this is skipped)
+	if (this.status !== null) {
+		this.finishDelay -= step;
+	}
+
+	while (step > 0) {
+		var thisStep = Math.min(step, maxStep);
+		this.actors.forEach(function(actor) {
+			actor.act(thisStep, this, keys);
+		}, this);
+		step -= thisStep;
+	}
+};
+
+
+//player collision:
+Level.prototype.playerTouched = function(type, actor) {
+	//touch lava, die
+	if (type === "lava" && this.status === null) {
+		this.status = "lost";
+		this.finishDelay = 1;
+	}
+	//touch coin, remove coin from map
+	else if (type === "coin") {
+    this.actors = this.actors.filter(function(other) {
+    	return other != actor;
+    });
+    //if no coins left you won level
+    if (!this.actors.some(function(actor) {
+    	return actor.type === "coin";
+    })) {
+    	this.status = "won";
+    	this.finishDelay = 1;
+    }
+	}
+};
+
+
 
 function Player(pos) {
 	this.pos = pos.plus(new Vector(0, -0.5));
@@ -88,6 +251,65 @@ function Player(pos) {
 	this.speed = new Vector(0, 0);
 }
 Player.prototype.type = "player";
+
+//horizontal movement
+var playerXSpeed = 7;
+
+Player.prototype.moveX = function(step, level, keys) {
+	this.speed.x = 0;
+	if (keys.left) this.speed.x -= playerXSpeed;
+	if (keys.right) this.speed.x += playerXSpeed;
+
+	var motion = new Vector(this.speed.x * step, 0);
+	var newPos = this.pos.plus(motion);
+	var obstacle = level.obstacleAt(newPos, this.size);
+	if (obstacle) {
+		level.playerTouched(obstacle);
+	}
+	else {
+		this.pos = newPos;
+	}
+};
+
+//vertical movement
+var gravity = 30;
+var jumpSpeed = 17;
+
+Player.prototype.moveY = function(step, level, keys) {
+	this.speed.y += step * gravity;
+	var motion = new Vector(0, this.speed.y * step);
+	var newPos = this.pos.plus(motion);
+	var obstacle = level.obstacleAt(newPos, this.size);
+	if (obstacle) {
+		level.playerTouched(obstacle);
+		if (keys.up && this.speed.y > 0) {
+			this.speed.y = -jumpSpeed;
+		}
+		else {
+			this.speed.y = 0;
+		}
+	}
+	else {
+		this.pos = newPos;
+	}
+};
+
+
+Player.prototype.act = function(step, level, keys) {
+	this.moveX(step, level, keys);
+	this.moveY(step, level, keys);
+
+	var otherActor = level.actorAt(this);
+	if (otherActor) {
+		level.playerTouched(otherActor.type, otherActor);
+	}
+
+	//die animation (shrinks each step)
+	if (level.status === "lost") {
+		this.pos.y += step;
+		this.size.y -= step;
+	}
+};
 
 
 
@@ -107,6 +329,23 @@ function Lava(pos, ch) {
 }
 Lava.prototype.type = "lava";
 
+Lava.prototype.act = function(step, level) {
+	var newPos = this.pos.plus(this.speed.times(step));
+	//move
+	if (!level.obstacleAt(newPos, this.size)) {
+		this.pos = newPos;
+	}
+	//drips start again
+	else if (this.repeatPos) {
+		this.pos = this.repeatPos;
+	}
+	//bouncing ones change direction
+	else {
+		this.speed = this.speed.times(-1)
+	}
+}
+
+
 
 
 function Coin(pos) {
@@ -116,6 +355,14 @@ function Coin(pos) {
 }
 Coin.prototype.type = "coin";
 
+var wobbleSpeed = 8, wobbleDist = 0.07;
+
+//little coin wobble movement
+Coin.prototype.act = function(step) {
+	this.wobble += step * wobbleSpeed;
+	var wobblePos = Math.sin(this.wobble) * wobbleDist;
+	this.pos = this.basePos.plus(new Vector(0, wobblePos));
+};
 
 
 
@@ -128,7 +375,7 @@ function elt(name, className) {
 }
 
 
-//display function
+//display object
 function DOMDisplay(parent, level) {
 	this.wrap = parent.appendChild(elt("div", "game"));
 	this.level = level;
@@ -214,9 +461,88 @@ DOMDisplay.prototype.clear = function() {
 
 
 
+//track key codes for player movement
+var arrowCodes = {37: "left", 38: "up", 39: "right"};
+
+function trackKeys(codes) {
+	var pressed = Object.create(null);
+	function handler(event) {
+		if (codes.hasOwnProperty(event.keyCode)) {
+			var down = event.type === "keydown";
+			pressed[codes[event.keyCode]] = down;
+			event.preventDefault();
+		}
+	}
+	addEventListener("keydown", handler);
+	addEventListener("keyup", handler);
+	return pressed;
+}
 
 
-//main game code:
 
-var simpleLevel = new Level(simpleLevelPlan);
-var display = new DOMDisplay(document.body, simpleLevel);
+//animation
+function runAnimation(frameFunc) {
+	var lastTime = null;
+	function frame(time) {
+		var stop = false;
+		if (lastTime != null) {
+			var timeStep = Math.min(time - lastTime, 100) / 1000;
+			stop = frameFunc(timeStep) === false;
+		}
+		lastTime = time;
+		if (!stop) {
+			requestAnimationFrame(frame);
+		}
+	}
+	requestAnimationFrame(frame);
+}
+
+
+
+
+var arrows = trackKeys(arrowCodes);
+
+function runLevel(level, Display, andThen) {
+  var display = new Display(document.body, level);
+  runAnimation(function(step) {
+  	level.animate(step, arrows);
+  	display.drawFrame(step);
+  	if (level.isFinished()) {
+  		display.clear();
+  		if (andThen) {
+  			andThen(level.status);
+  		}
+  		return false;
+  	}
+  });
+}
+
+function runGame(plans, Display) {
+	function startLevel(n) {
+		runLevel(new Level(plans[n]), Display, function(status) {
+			//died, replay level
+			if (status === "lost") {
+				startLevel(n);
+			}
+			//won, next level
+			else if (n < plans.length - 1) {
+				startLevel(n + 1);
+			}
+			//no levels left, you win (just alert for now)
+			else {
+				alert("you win");
+			}
+		});
+	}
+	//edit this to test levels without having to play through (first level is 0)
+	startLevel(6);
+}
+
+
+
+
+
+
+
+//RUN THE GAME!
+runGame(GAME_LEVELS, DOMDisplay);
